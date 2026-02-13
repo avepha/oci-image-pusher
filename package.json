@@ -1,0 +1,35 @@
+{
+  "name": "oci-image-pusher",
+  "version": "0.1.0",
+  "description": "Interactive CLI tool for building and pushing multi-arch Docker images to Oracle Cloud Infrastructure Container Registry (OCIR)",
+  "license": "MIT",
+  "author": "avepha",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/avepha/oci-image-pusher.git"
+  },
+  "files": ["src"],
+  "module": "src/index.ts",
+  "type": "module",
+  "bin": {
+    "oci-push": "src/index.ts"
+  },
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "build": "bun build --compile src/index.ts --outfile oci-push",
+    "check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "engines": {
+    "bun": ">=1.0"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.0.1",
+    "picocolors": "^1.1.1"
+  }
+}
