@@ -34,7 +34,7 @@ oci-push
 Run the CLI from a directory that contains a Dockerfile:
 
 ```bash
-oci-push
+bunx oci-image-pusher
 ```
 
 The CLI walks you through the entire workflow interactively. Press `Ctrl+C` at any prompt to cancel.
