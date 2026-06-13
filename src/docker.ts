@@ -1,7 +1,8 @@
 import * as p from "@clack/prompts";
 import pc from "picocolors";
-import { join, dirname } from "path";
+import { join } from "path";
 import { $, Glob } from "bun";
+import type { ImageTarget } from "./config";
 import { isCancel, run } from "./helpers";
 
 export async function ensureDockerLogin(endpoint: string, namespace: string): Promise<void> {
@@ -105,27 +106,67 @@ export async function discoverDockerfile(): Promise<string> {
   return selectedDockerfile;
 }
 
-export async function executeBuild(ocirRepo: string, dockerfile: string, push: boolean) {
+interface DockerBuildCommandOptions {
+  endpoint: string;
+  namespace: string;
+  image: ImageTarget;
+  rev: string;
+  push: boolean;
+}
+
+export function buildDockerBuildCommand(options: DockerBuildCommandOptions): string[] {
+  const ocirRepo = `${options.endpoint}/${options.namespace}/${options.image.name}`;
+  const args = [
+    "docker", "buildx", "build",
+    "--platform", "linux/amd64,linux/arm64",
+    "-t", `${ocirRepo}:latest`,
+    "-t", `${ocirRepo}:${options.rev}`,
+  ];
+
+  for (const [key, value] of Object.entries(options.image.buildArgs)) {
+    args.push("--build-arg", `${key}=${value}`);
+  }
+
+  if (options.push) args.push("--push");
+
+  args.push("-f", options.image.dockerfile, options.image.context);
+  return args;
+}
+
+export function formatDockerBuildCommand(command: readonly string[]): string {
+  return command
+    .map((part, index) => {
+      if (command[index - 1] !== "--build-arg") return part;
+
+      const separator = part.indexOf("=");
+      if (separator <= 0) return "<hidden>";
+
+      return `${part.slice(0, separator)}=<hidden>`;
+    })
+    .join(" ");
+}
+
+async function getGitShortRev(): Promise<string> {
   let rev = "dev";
   try {
     rev = (await $`git rev-parse --short HEAD`.text()).trim() || "dev";
   } catch {
     // Not a git repo or git not available — fall back to "dev" tag
   }
+  return rev;
+}
 
-  const args = [
-    "docker", "buildx", "build",
-    "--platform", "linux/amd64,linux/arm64",
-    "-t", `${ocirRepo}:latest`,
-    "-t", `${ocirRepo}:${rev}`,
-  ];
+export async function executeBuild(
+  endpoint: string,
+  namespace: string,
+  image: ImageTarget,
+  push: boolean
+) {
+  const rev = await getGitShortRev();
+  const ocirRepo = `${endpoint}/${namespace}/${image.name}`;
+  const args = buildDockerBuildCommand({ endpoint, namespace, image, rev, push });
 
-  if (push) args.push("--push");
-
-  const buildContext = dirname(dockerfile);
-  args.push("-f", dockerfile, buildContext);
-
-  p.log.step(`Running: ${pc.dim(args.join(" "))}`);
+  p.log.step(`Running: ${pc.dim(formatDockerBuildCommand(args))}`);
 
   const buildCode = await run(args);
 
@@ -135,8 +176,8 @@ export async function executeBuild(ocirRepo: string, dockerfile: string, push: b
   }
 
   if (push) {
-    p.outro(pc.green(`Pushed ${ocirRepo}:latest and ${ocirRepo}:${rev}`));
+    p.log.success(`Pushed ${ocirRepo}:latest and ${ocirRepo}:${rev}`);
   } else {
-    p.outro(pc.green("Build completed successfully."));
+    p.log.success(`Built ${ocirRepo}:latest and ${ocirRepo}:${rev}`);
   }
 }

@@ -16,6 +16,7 @@
   },
   "scripts": {
     "dev": "bun run src/index.ts",
+    "test": "bun test",
     "build": "bun build --compile src/index.ts --outfile oci-push",
     "check": "tsc --noEmit"
   },

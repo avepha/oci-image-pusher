@@ -6,6 +6,8 @@ Interactive CLI tool for building and pushing multi-arch Docker images to Oracle
 
 - Guided setup for OCIR region, namespace, and image name
 - Auto-discovers Dockerfiles in your project
+- Supports one or more Docker image targets per project
+- Supports per-image Docker build args
 - Builds multi-arch images (`linux/amd64`, `linux/arm64`) via `docker buildx`
 - Tags images with both `latest` and git short rev (e.g. `f85dbc5`)
 - Saves config to `.oci-push.json` for repeat use
@@ -39,9 +41,9 @@ bunx oci-image-pusher
 
 The CLI walks you through the entire workflow interactively. Press `Ctrl+C` at any prompt to cancel.
 
-### Step 1: Configure OCIR (first run only)
+### Step 1: Configure OCIR and images (first run only)
 
-On first run, the CLI prompts for three things:
+On first run, the CLI prompts for OCIR settings and one or more image targets.
 
 **1. OCIR Region** — select from the list or enter a custom endpoint:
 
@@ -70,11 +72,30 @@ On first run, the CLI prompts for three things:
 └
 ```
 
-**3. Docker Image Name** — the name for your image in the registry:
+**3. Image targets** — for each Docker image, enter:
+
+- Docker image name
+- Dockerfile path
+- Build context
+- Optional build args as repeated `KEY=VALUE` entries
+
+Build context defaults to the selected Dockerfile's parent directory. For a root `Dockerfile`, that default is `.`.
+
+Build args are not secrets. Do not put passwords, private API keys, OCI auth tokens, Supabase service-role keys, or other private credentials in `buildArgs`. Build args are appropriate for public frontend values such as Vite public environment variables, Supabase publishable keys, and public API base URLs.
+
+Example image target prompts:
 
 ```
 ◆  Docker Image Name
-│  my-app
+│  nara-coop-frontend
+└
+
+◆  Build context
+│  .
+└
+
+◆  Build arg KEY=VALUE (leave blank when done)
+│  VITE_API_BASE_URL=https://api.example.com
 └
 ```
 
@@ -88,6 +109,8 @@ After setup, the config is saved to `.oci-push.json` in the current directory. S
 │  Namespace:   kx7mp2wrtqdf
 │  Image:       my-app
 │  Dockerfile:  Dockerfile
+│  Context:     .
+│  Build args:  none
 │
 └
 ```
@@ -129,7 +152,7 @@ The CLI checks `~/.docker/config.json` for an existing login to the OCIR endpoin
 
 ### Step 4: Build mode
 
-Choose what to do:
+For a single-image config, choose what to do:
 
 ```
 ◆  What would you like to do?
@@ -141,13 +164,27 @@ Choose what to do:
 - **Build and push** — builds the multi-arch image and pushes it to OCIR
 - **Build only** — builds locally without pushing (useful for testing)
 
+For a multi-image config, choose one of:
+
+```
+◆  What would you like to do?
+│  ○ Build and push one image
+│  ○ Build and push all images
+│  ○ Build one image locally
+│  ○ Build all images locally
+└
+```
+
+When building one image, the CLI prompts you to select the image target.
+
 ### Step 5: Build
 
 The CLI runs `docker buildx build` with:
 
 - **Platforms**: `linux/amd64`, `linux/arm64`
 - **Tags**: `latest` and current git short rev (falls back to `dev` if not in a git repo)
-- **Build context**: the parent directory of the selected Dockerfile
+- **Build args**: each configured build arg as `--build-arg KEY=VALUE`
+- **Build context**: the configured image context
 
 ```
 ◇  Running: docker buildx build --platform linux/amd64,linux/arm64 \
@@ -158,7 +195,9 @@ The CLI runs `docker buildx build` with:
 
 ## Config file
 
-The `.oci-push.json` file stores your project configuration:
+The `.oci-push.json` file stores your project configuration.
+
+The legacy single-image config shape is still supported:
 
 ```json
 {
@@ -167,6 +206,58 @@ The `.oci-push.json` file stores your project configuration:
   "imageName": "my-app",
   "dockerfile": "Dockerfile"
 }
+```
+
+New configs can use the `images` array for one or more image targets:
+
+```json
+{
+  "endpoint": "ap-singapore-1.ocir.io",
+  "namespace": "kx7mp2wrtqdf",
+  "images": [
+    {
+      "name": "nara-coop-frontend",
+      "dockerfile": "Dockerfile",
+      "context": ".",
+      "buildArgs": {
+        "VITE_SUPABASE_URL": "https://your-project-ref.supabase.co",
+        "VITE_SUPABASE_PUBLISHABLE_KEY": "your-public-key",
+        "VITE_API_BASE_URL": "https://api.example.com"
+      }
+    },
+    {
+      "name": "nara-coop-api",
+      "dockerfile": "server/Dockerfile",
+      "context": "server",
+      "buildArgs": {}
+    }
+  ]
+}
+```
+
+If `context` is omitted for an image target, the CLI defaults it to the Dockerfile parent directory. The CLI writes explicit `context` values when it creates a new config.
+
+Example frontend build command:
+
+```bash
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -t ap-singapore-1.ocir.io/kx7mp2wrtqdf/nara-coop-frontend:latest \
+  -t ap-singapore-1.ocir.io/kx7mp2wrtqdf/nara-coop-frontend:f85dbc5 \
+  --build-arg VITE_SUPABASE_URL=https://your-project-ref.supabase.co \
+  --build-arg VITE_SUPABASE_PUBLISHABLE_KEY=your-public-key \
+  --build-arg VITE_API_BASE_URL=https://api.example.com \
+  -f Dockerfile .
+```
+
+Example backend build command:
+
+```bash
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -t ap-singapore-1.ocir.io/kx7mp2wrtqdf/nara-coop-api:latest \
+  -t ap-singapore-1.ocir.io/kx7mp2wrtqdf/nara-coop-api:f85dbc5 \
+  -f server/Dockerfile server
 ```
 
 To reconfigure, delete `.oci-push.json` and run the CLI again. This file is typically added to `.gitignore` since it may contain project-specific settings.

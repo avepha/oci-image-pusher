@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-Single-file interactive CLI tool that guides users through building and pushing multi-arch Docker images to Oracle Cloud Infrastructure Container Registry (OCIR). Built with Bun.
+Interactive CLI tool that guides users through building and pushing one or more multi-arch Docker images to Oracle Cloud Infrastructure Container Registry (OCIR). Built with Bun.
 
 ## Commands
 
@@ -16,13 +16,15 @@ Single-file interactive CLI tool that guides users through building and pushing 
 
 Split across four modules in `src/`:
 
-- **`index.ts`** — entry point; orchestrates the sequential flow: load config → login → select mode → build
-- **`config.ts`** — loads/saves `.oci-push.json`; prompts for region/namespace/image if no config exists; exports `Config` interface and `OCIR_REGIONS`
-- **`docker.ts`** — `ensureDockerLogin(endpoint, namespace)` checks `~/.docker/config.json` and prompts credentials if needed (formats username as `namespace/user` for OCIR); `discoverDockerfile()` globs and selects Dockerfiles; `executeBuild()` runs `docker buildx build --platform linux/amd64,linux/arm64` with git short rev tag
+- **`index.ts`** — entry point; orchestrates the flow: load config → select one/all target mode → login for push flows → build selected image targets
+- **`config.ts`** — loads/saves `.oci-push.json`; normalizes legacy single-image config and new `images[]` config; prompts for region/namespace/images if no config exists; exports `Config`, `ImageTarget`, and `OCIR_REGIONS`
+- **`docker.ts`** — `ensureDockerLogin(endpoint, namespace)` checks `~/.docker/config.json` and prompts credentials if needed (formats username as `namespace/user` for OCIR); `discoverDockerfile()` globs and selects Dockerfiles; `buildDockerBuildCommand()` builds testable `docker buildx build` args; `executeBuild()` runs the command with git short rev tag
 - **`helpers.ts`** — `isCancel()` wraps prompt results for Ctrl+C handling; `run()` spawns commands with inherited stdio
 
 ## Key Details
 
 - Uses `@clack/prompts` for all interactive UI and `picocolors` for coloring
-- Build context is set to the Dockerfile's parent directory (not cwd)
+- Legacy configs are normalized in memory; new configs are saved with explicit `images[].context`
+- Build context defaults to the Dockerfile's parent directory when omitted in a new image target
+- Build arg values should be hidden in CLI summaries/logged commands
 - The `@clack/prompts` `text()` does not support a `hint` property
