@@ -62,13 +62,25 @@ export async function ensureDockerLogin(endpoint: string, namespace: string): Pr
   p.log.success("Docker login successful.");
 }
 
-export async function discoverDockerfile(): Promise<string> {
-  const dockerfiles: string[] = [];
+export function filterDockerfilePaths(paths: readonly string[]): string[] {
+  return paths.filter((file) => {
+    if (!file.split("/").some((part) => part.startsWith("Dockerfile"))) return false;
+    return !file.split("/").some((part) => part === "node_modules" || part === ".git");
+  });
+}
+
+export async function listDockerfiles(): Promise<string[]> {
+  const files: string[] = [];
   const globber = new Glob("**/Dockerfile*");
   for await (const file of globber.scan(process.cwd())) {
-    if (file.includes("node_modules") || file.includes(".git")) continue;
-    dockerfiles.push(file);
+    files.push(file);
   }
+
+  return filterDockerfilePaths(files);
+}
+
+export async function discoverDockerfile(): Promise<string> {
+  const dockerfiles = await listDockerfiles();
 
   if (dockerfiles.length === 0) {
     p.log.error("No Dockerfile found in current directory.");

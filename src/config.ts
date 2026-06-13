@@ -2,13 +2,20 @@ import * as p from "@clack/prompts";
 import pc from "picocolors";
 import { dirname, join } from "path";
 import { isCancel } from "./helpers";
-import { discoverDockerfile } from "./docker";
+import { discoverDockerfile, listDockerfiles } from "./docker";
 
 export interface ImageTarget {
   name: string;
   dockerfile: string;
   context: string;
   buildArgs: Record<string, string>;
+}
+
+interface ImageTargetConfig {
+  name: string;
+  dockerfile: string;
+  context?: string;
+  buildArgs?: Record<string, string>;
 }
 
 export interface Config {
@@ -150,40 +157,18 @@ async function loadConfig(): Promise<Config | null> {
   return null;
 }
 
-async function saveConfig(config: Config) {
+async function saveConfig(config: {
+  endpoint: string;
+  namespace: string;
+  images: ImageTargetConfig[];
+}) {
   await Bun.write(
     join(process.cwd(), CONFIG_FILE),
     JSON.stringify(config, null, 2) + "\n"
   );
 }
 
-async function promptBuildArgs(): Promise<Record<string, string>> {
-  p.log.warn(
-    "Build args are not secrets. Do not store passwords, private API keys, OCI auth tokens, Supabase service-role keys, or other private credentials."
-  );
-
-  const buildArgs: Record<string, string> = {};
-  while (true) {
-    const entry = await p.text({
-      message: "Build arg KEY=VALUE (leave blank when done)",
-      placeholder: "VITE_API_BASE_URL=https://api.example.com",
-      validate: (value) => {
-        if (!value) return undefined;
-        return parseBuildArg(value) ? undefined : "Use KEY=VALUE format";
-      },
-    });
-    if (isCancel(entry)) process.exit(0);
-    if (!entry) return buildArgs;
-
-    const parsed = parseBuildArg(entry);
-    if (parsed) {
-      const [key, value] = parsed;
-      buildArgs[key] = value;
-    }
-  }
-}
-
-async function promptImageTarget(): Promise<ImageTarget> {
+async function promptImageTarget(): Promise<ImageTargetConfig> {
   const name = await p.text({
     message: "Docker Image Name",
     placeholder: "my-app",
@@ -192,25 +177,18 @@ async function promptImageTarget(): Promise<ImageTarget> {
   if (isCancel(name)) process.exit(0);
 
   const dockerfile = await discoverDockerfile();
-  const defaultContext = getDefaultContext(dockerfile);
-  const contextInput = await p.text({
-    message: "Build context",
-    placeholder: defaultContext,
-  });
-  if (isCancel(contextInput)) process.exit(0);
-
-  const buildArgs = await promptBuildArgs();
 
   return {
     name,
     dockerfile,
-    context: contextInput || defaultContext,
-    buildArgs,
   };
 }
 
-async function promptImageTargets(): Promise<ImageTarget[]> {
-  const images: ImageTarget[] = [];
+async function promptImageTargets(): Promise<ImageTargetConfig[]> {
+  const dockerfiles = await listDockerfiles();
+  p.note(dockerfiles.map((dockerfile) => pc.cyan(dockerfile)).join("\n"), "Discovered Dockerfiles");
+
+  const images: ImageTargetConfig[] = [];
 
   while (true) {
     images.push(await promptImageTarget());
@@ -266,8 +244,14 @@ export async function loadOrPromptConfig(): Promise<Config> {
   if (isCancel(ns)) process.exit(0);
 
   const images = await promptImageTargets();
-
-  const config: Config = { endpoint, namespace: ns, images };
+  const config = { endpoint, namespace: ns, images };
   await saveConfig(config);
-  return config;
+
+  const normalized = normalizeConfig(config);
+  if (!normalized) {
+    p.outro(pc.red("Generated config is invalid."));
+    process.exit(1);
+  }
+
+  return normalized;
 }

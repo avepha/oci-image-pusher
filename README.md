@@ -72,16 +72,19 @@ On first run, the CLI prompts for OCIR settings and one or more image targets.
 └
 ```
 
-**3. Image targets** — for each Docker image, enter:
+**3. Image targets** — the CLI first displays every discovered Dockerfile so you can decide which image targets to name:
+
+```
+◇  Discovered Dockerfiles
+│  Dockerfile
+│  server/Dockerfile
+└
+```
+
+For each Docker image, enter:
 
 - Docker image name
 - Dockerfile path
-- Build context
-- Optional build args as repeated `KEY=VALUE` entries
-
-Build context defaults to the selected Dockerfile's parent directory. For a root `Dockerfile`, that default is `.`.
-
-Build args are not secrets. Do not put passwords, private API keys, OCI auth tokens, Supabase service-role keys, or other private credentials in `buildArgs`. Build args are appropriate for public frontend values such as Vite public environment variables, Supabase publishable keys, and public API base URLs.
 
 Example image target prompts:
 
@@ -90,14 +93,13 @@ Example image target prompts:
 │  nara-coop-frontend
 └
 
-◆  Build context
-│  .
-└
-
-◆  Build arg KEY=VALUE (leave blank when done)
-│  VITE_API_BASE_URL=https://api.example.com
+◆  Select a Dockerfile
+│  ○ Dockerfile
+│  ○ server/Dockerfile
 └
 ```
+
+The onboarding flow does not ask for build context or build args. Add optional `context` and `buildArgs` fields in `.oci-push.json` later when a target needs them.
 
 After setup, the config is saved to `.oci-push.json` in the current directory. Subsequent runs load this file automatically and skip the setup:
 
@@ -208,7 +210,26 @@ The legacy single-image config shape is still supported:
 }
 ```
 
-New configs can use the `images` array for one or more image targets:
+New configs can use the `images` array for one or more image targets. The CLI writes this minimal shape during onboarding:
+
+```json
+{
+  "endpoint": "ap-singapore-1.ocir.io",
+  "namespace": "kx7mp2wrtqdf",
+  "images": [
+    {
+      "name": "nara-coop-frontend",
+      "dockerfile": "Dockerfile"
+    },
+    {
+      "name": "nara-coop-api",
+      "dockerfile": "server/Dockerfile"
+    }
+  ]
+}
+```
+
+You can manually add optional `context` and `buildArgs` fields:
 
 ```json
 {
@@ -235,7 +256,9 @@ New configs can use the `images` array for one or more image targets:
 }
 ```
 
-If `context` is omitted for an image target, the CLI defaults it to the Dockerfile parent directory. The CLI writes explicit `context` values when it creates a new config.
+If `context` is omitted for an image target, the CLI defaults it to the Dockerfile parent directory. If `buildArgs` is omitted, the CLI uses no build args.
+
+Build args are not secrets. Do not put passwords, private API keys, OCI auth tokens, Supabase service-role keys, or other private credentials in `buildArgs`. Build args are appropriate for public frontend values such as Vite public environment variables, Supabase publishable keys, and public API base URLs.
 
 Example frontend build command:
 

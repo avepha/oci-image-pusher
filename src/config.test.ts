@@ -88,6 +88,32 @@ describe("normalizeConfig", () => {
     });
   });
 
+  test("normalizes onboarding image targets that only include name and dockerfile", () => {
+    const config = normalizeConfig({
+      endpoint: "ap-singapore-1.ocir.io",
+      namespace: "kx7mp2wrtqdf",
+      images: [
+        {
+          name: "nara-coop-frontend",
+          dockerfile: "Dockerfile",
+        },
+      ],
+    });
+
+    expect(config).toEqual({
+      endpoint: "ap-singapore-1.ocir.io",
+      namespace: "kx7mp2wrtqdf",
+      images: [
+        {
+          name: "nara-coop-frontend",
+          dockerfile: "Dockerfile",
+          context: ".",
+          buildArgs: {},
+        },
+      ],
+    });
+  });
+
   test("rejects invalid config shapes", () => {
     expect(normalizeConfig({ endpoint: "ap-singapore-1.ocir.io" })).toBeNull();
     expect(

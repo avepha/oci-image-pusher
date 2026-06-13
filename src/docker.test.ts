@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { buildDockerBuildCommand, formatDockerBuildCommand } from "./docker";
+import {
+  buildDockerBuildCommand,
+  filterDockerfilePaths,
+  formatDockerBuildCommand,
+} from "./docker";
 import type { ImageTarget } from "./config";
 
 const frontendImage: ImageTarget = {
@@ -53,6 +57,21 @@ describe("buildDockerBuildCommand", () => {
     });
 
     expect(command).not.toContain("--push");
+  });
+});
+
+describe("filterDockerfilePaths", () => {
+  test("keeps Dockerfile paths and skips git and node_modules paths", () => {
+    expect(
+      filterDockerfilePaths([
+        "Dockerfile",
+        "server/Dockerfile",
+        "server/Dockerfile.prod",
+        "node_modules/pkg/Dockerfile",
+        ".git/modules/app/Dockerfile",
+        "README.md",
+      ])
+    ).toEqual(["Dockerfile", "server/Dockerfile", "server/Dockerfile.prod"]);
   });
 });
 
