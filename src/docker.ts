@@ -4,11 +4,20 @@ import { join, dirname } from "path";
 import { $, Glob } from "bun";
 import { isCancel, run } from "./helpers";
 
-export async function ensureDockerLogin(endpoint: string, namespace: string): Promise<void> {
+interface DockerLoginOptions {
+  nonInteractive?: boolean;
+}
+
+export async function ensureDockerLogin(
+  endpoint: string,
+  namespace: string,
+  options: DockerLoginOptions = {}
+): Promise<void> {
   const loginSpinner = p.spinner();
   loginSpinner.start("Checking Docker login status...");
 
   let loggedIn = false;
+  let couldReadDockerConfig = true;
   try {
     const dockerConfigPath = join(
       process.env.HOME ?? "~",
@@ -22,7 +31,7 @@ export async function ensureDockerLogin(endpoint: string, namespace: string): Pr
       loggedIn = endpoint in auths;
     }
   } catch {
-    p.log.warn("Could not read Docker config — will prompt for login.");
+    couldReadDockerConfig = false;
   }
 
   if (loggedIn) {
@@ -30,7 +39,20 @@ export async function ensureDockerLogin(endpoint: string, namespace: string): Pr
     return;
   }
 
+  if (options.nonInteractive) {
+    loginSpinner.stop(`Not logged in to ${pc.yellow(endpoint)}`);
+    const reason = couldReadDockerConfig
+      ? `Docker login for ${endpoint} was not found.`
+      : "Could not read Docker config to verify login.";
+    p.log.error(`${reason} Run docker login first or retry without --yes.`);
+    process.exit(1);
+  }
+
   loginSpinner.stop(`Not logged in to ${pc.yellow(endpoint)}`);
+
+  if (!couldReadDockerConfig) {
+    p.log.warn("Could not read Docker config - will prompt for login.");
+  }
 
   const username = await p.text({
     message: "Docker Username (OCI email or federated user)",

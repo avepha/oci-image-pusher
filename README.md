@@ -39,6 +39,29 @@ bunx oci-image-pusher
 
 The CLI walks you through the entire workflow interactively. Press `Ctrl+C` at any prompt to cancel.
 
+Show command help:
+
+```bash
+oci-push --help
+oci-push -h
+```
+
+Use a config file outside the default `.oci-push.json` path:
+
+```bash
+oci-push --config=./.oci-push.prod.json
+oci-push --config ./.oci-push.prod.json
+```
+
+Run non-interactively for automation:
+
+```bash
+oci-push --yes --config=./.oci-push.prod.json
+oci-push -y
+```
+
+Non-interactive mode requires an existing valid config file and an existing Docker login for the configured OCIR endpoint. It skips all prompts and runs **build and push**.
+
 ### Step 1: Configure OCIR (first run only)
 
 On first run, the CLI prompts for three things:
@@ -78,7 +101,7 @@ On first run, the CLI prompts for three things:
 └
 ```
 
-After setup, the config is saved to `.oci-push.json` in the current directory. Subsequent runs load this file automatically and skip the setup:
+After setup, the config is saved to `.oci-push.json` in the current directory, or to the path passed with `--config`. Subsequent runs load this file automatically and skip the setup:
 
 ```
 ┌  OCI Image Pusher
@@ -169,7 +192,15 @@ The `.oci-push.json` file stores your project configuration:
 }
 ```
 
-To reconfigure, delete `.oci-push.json` and run the CLI again. This file is typically added to `.gitignore` since it may contain project-specific settings.
+To reconfigure, delete `.oci-push.json` and run the CLI again. If you use `--config=path`, the CLI reads and writes that JSON file instead. This file is typically added to `.gitignore` since it may contain project-specific settings.
+
+For CI or other automation, create the config file ahead of time and run with `--yes`:
+
+```bash
+oci-push --yes --config=./.oci-push.prod.json
+```
+
+If the config file is missing, invalid, or Docker is not already logged in, `--yes` exits with a non-zero status instead of prompting.
 
 ## Supported Regions
 
